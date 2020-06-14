@@ -1,0 +1,3 @@
+pub trait Solvable<TState> {
+
+}
