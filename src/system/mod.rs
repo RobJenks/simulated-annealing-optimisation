@@ -43,7 +43,7 @@ impl<'a, TState> System<'a, TState>
         while self.within_temp_threshold(sys_temp) && !self.shutdown_requested() {
             self.handle_solver_requests();
 
-            
+
         }
 Results::new(vec![])
 
@@ -66,15 +66,17 @@ Results::new(vec![])
                 .for_each(|_| self.terminate_solver());
         }
         else {
-            self.solvers.append(&mut (count..self.pool_target)
-                .map(|_| self.create_solver())
+            let new_solvers = (count..self.pool_target)
+                .map(|_| self.next_solver_id()).collect::<Vec<String>>();
+
+            self.solvers.append(&mut new_solvers.into_iter()
+                .map(|id| self.create_solver(id))
                 .collect::<Vec<(Solver<TState>, Sender<Command>)>>()
             );
         }
     }
 
-    fn create_solver(&self) -> (Solver<TState>, Sender<Command>) {
-        let id = self.next_solver_id();
+    fn create_solver(&self, id: String) -> (Solver<TState>, Sender<Command>) {
         println!("Creating solver '{}'", id);
 
         let (cmd_tx, cmd_rx) = channel();
@@ -107,7 +109,8 @@ Results::new(vec![])
             .unwrap_or_else(|e| panic!("Failed to issue solver shutdown command ({})", e));
     }
 
-    fn next_solver_id(&self) -> String {
+    fn next_solver_id(&mut self) -> String {
+        self.total_solvers_created += 1;
         format!("solver{}", self.total_solvers_created)
     }
 
