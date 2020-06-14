@@ -1,16 +1,24 @@
-use crate::worker::Worker;
+pub mod command;
 
-pub struct Solver {
-    workers: Vec<Worker>,
-    pool_target: usize
+use crate::system::solvable::Solvable;
+use std::sync::mpsc::{Sender, Receiver};
+use crate::solver::command::Command;
+use crate::system::state::State;
+
+pub struct Solver<TState>
+    where TState: State {
+
+    id: String,
+    command_receiver: Receiver<Command>,
+    result_channel: Sender<TState>
 }
 
-impl Solver {
-    pub fn new() -> Self {
-        Self { workers: vec![], pool_target: 0 }
+impl <TState> Solver<TState>
+    where TState: State {
+
+    pub fn new(id: String, command_receiver: Receiver<Command>, result_channel: Sender<TState>) -> Self {
+        Self { id, command_receiver, result_channel }
     }
 
-    pub fn set_pool_size(&mut self, size: usize) {
-        self.pool_target = size;
-    }
+    pub fn get_id(&self) -> &String { &self.id }
 }
