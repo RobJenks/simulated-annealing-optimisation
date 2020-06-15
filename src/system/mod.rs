@@ -9,6 +9,7 @@ use solvable::Solvable;
 use results::Results;
 use std::borrow::BorrowMut;
 use crate::system::state::State;
+use crate::solver::result::SolverResult;
 
 const DEFAULT_INITIAL_POOL_SIZE: usize = 1;
 
@@ -17,12 +18,12 @@ pub struct System<'a, TState>
 
     data: &'a dyn Solvable<TState>,
     pool_target: usize,
-    total_solvers_created: usize,
+    total_solvers_created: SolverId,
 
-    solvers: Vec<(Solver<TState>, Sender<Command>)>,
-    solver_tx: Sender<TState>,
+    solvers: Vec<Solver<TState>>,
 
-    solver_rx: Receiver<TState>,            // mpsc receipt channel for solver results
+    solver_tx: Sender<SolverResult<TState>>,    // mpsc sender prototype for solver instantiation
+    solver_rx: Receiver<SolverResult<TState>>,  // mpsc receipt channel for solver results
 }
 
 impl<'a, TState> System<'a, TState>
@@ -67,23 +68,20 @@ Results::new(vec![])
         }
         else {
             let new_solvers = (count..self.pool_target)
-                .map(|_| self.next_solver_id()).collect::<Vec<String>>();
+                .map(|_| self.next_solver_id()).collect::<Vec<_>>();
 
             self.solvers.append(&mut new_solvers.into_iter()
                 .map(|id| self.create_solver(id))
-                .collect::<Vec<(Solver<TState>, Sender<Command>)>>()
+                .collect::<Vec<_>>()
             );
         }
     }
 
-    fn create_solver(&self, id: String) -> (Solver<TState>, Sender<Command>) {
-        println!("Creating solver '{}'", id);
+    fn create_solver(&self, id: SolverId) -> Solver<TState> {
+        println!("Creating solver {}", id);
 
-        let (cmd_tx, cmd_rx) = channel();
-        (
-            Solver::<TState>::new(id, cmd_rx, self.solver_tx.clone()),
-            cmd_tx
-        )
+        let result_tx = self.solver_tx.clone();
+        Solver::<TState>::new(id, result_tx)
     }
 
     fn terminate_solver(&mut self) {
@@ -92,9 +90,9 @@ Results::new(vec![])
         self.perform_solver_termination(self.solvers.len() - 1);
     }
 
-    fn terminate_solver_by_id(&mut self, solver_id: &String) {
+    fn terminate_solver_by_id(&mut self, solver_id: &SolverId) {
         let remove = self.solvers.iter()
-            .position(|x| x.0.get_id() == solver_id)
+            .position(|x| x.get_id() == solver_id)
             .unwrap_or_else(|| panic!("Missing solver instance during termination"));
 
         self.perform_solver_termination(remove);
@@ -102,18 +100,16 @@ Results::new(vec![])
 
     fn perform_solver_termination(&mut self, ix: usize) {
         let solver = self.solvers.remove(ix);
-        println!("Terminating solver '{}'", solver.0.get_id());
+        println!("Terminating solver '{}'", solver.get_id());
 
         solver
-            .1.send(Command::terminate())
+            .inbound_command()
+            .send(Command::terminate())
             .unwrap_or_else(|e| panic!("Failed to issue solver shutdown command ({})", e));
     }
 
-    fn next_solver_id(&mut self) -> String {
+    fn next_solver_id(&mut self) -> SolverId {
         self.total_solvers_created += 1;
-        format!("solver{}", self.total_solvers_created)
+        self.total_solvers_created
     }
-
-
-
 }
