@@ -6,7 +6,7 @@ use crate::system::solvable::Solvable;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use crate::solver::command::Command;
 use crate::system::state::State;
-use crate::base::SolverId;
+use crate::base::{SolverId, Temp};
 use crate::solver::signal::SolverSignal;
 use crate::solver::result::SolverResult;
 
@@ -14,6 +14,7 @@ pub struct Solver<TState>
     where TState: State {
 
     id: SolverId,
+    data: Box<dyn Solvable<TState>>,
 
     // Channel interfaces exposed to caller
     command_inbound: Sender<Command>,
@@ -30,16 +31,20 @@ pub struct Solver<TState>
 impl <TState> Solver<TState>
     where TState: State {
 
-    pub fn new(id: SolverId, result_output: Sender<SolverResult<TState>>) -> Self {
+    pub fn new(id: SolverId, data: Box<dyn Solvable<TState>>, result_output: Sender<SolverResult<TState>>) -> Self {
         let (command_inbound, command_receiver) = channel();
         let (signal_sender, signal_outbound) = channel();
         let (result_output, result_outbound) = channel();
 
-        Self { id, command_inbound, command_receiver, signal_outbound, signal_sender, result_output }
+        Self { id, data, command_inbound, command_receiver, signal_outbound, signal_sender, result_output }
     }
 
     pub fn start(&self) {
 
+    }
+
+    fn within_temp_threshold(&self, sys_temp: Temp) -> bool {
+        sys_temp < self.data.get_temp_termination_threshold()
     }
 
     pub fn get_id(&self) -> &SolverId { &self.id }

@@ -10,8 +10,11 @@ use results::Results;
 use std::borrow::BorrowMut;
 use crate::system::state::State;
 use crate::solver::result::SolverResult;
+use std::time::Duration;
+use crate::solver::signal::SolverSignal;
 
 const DEFAULT_INITIAL_POOL_SIZE: usize = 1;
+const DEFAULT_RESULT_CHANNEL_TIMEOUT_SECS: u64 = 3;
 
 pub struct System<'a, TState>
     where TState: State {
@@ -21,6 +24,7 @@ pub struct System<'a, TState>
     total_solvers_created: SolverId,
 
     solvers: Vec<Solver<TState>>,
+    results: Vec<SolverResult<TState>>,
 
     solver_tx: Sender<SolverResult<TState>>,    // mpsc sender prototype for solver instantiation
     solver_rx: Receiver<SolverResult<TState>>,  // mpsc receipt channel for solver results
@@ -33,29 +37,44 @@ impl<'a, TState> System<'a, TState>
         let (solver_tx, solver_rx) = channel();
 
         Self {
-            data, solvers: vec![], pool_target: DEFAULT_INITIAL_POOL_SIZE, total_solvers_created: 0,
+            data, solvers: vec![], results: vec![],
+            pool_target: DEFAULT_INITIAL_POOL_SIZE, total_solvers_created: 0,
             solver_tx, solver_rx
         }
     }
 
     pub fn execute(&mut self) -> Results<TState> {
-        let mut sys_temp = self.data.get_initial_system_temp();
-
-        while self.within_temp_threshold(sys_temp) && !self.shutdown_requested() {
+        while self.has_active_solvers() {
             self.handle_solver_requests();
+            self.handle_solver_signals();
 
-
+            self.solver_rx.recv_timeout(Duration::from_secs(DEFAULT_RESULT_CHANNEL_TIMEOUT_SECS))
+                .and_then(|x| Ok(self.results.push(x)))
+                .unwrap_or_else(|_| ());
         }
+
 Results::new(vec![])
 
     }
 
-    fn within_temp_threshold(&self, sys_temp: Temp) -> bool {
-        sys_temp < self.data.get_temp_termination_threshold()
-    }
 
     fn shutdown_requested(&self) -> bool {
         self.pool_target == 0
+    }
+
+    fn has_active_solvers(&self) -> bool { !self.solvers.is_empty() }
+
+    fn handle_solver_signals(&mut self) {
+        let signals = self.solvers.iter()
+            .map(|x| x.outbound_signal().try_recv())
+            .filter_map(|x| x.ok())
+            .collect::<Vec<_>>();
+
+        signals.iter().for_each(|x| self.handle_solver_signal(x));
+    }
+
+    fn handle_solver_signal(&mut self, signal: &SolverSignal) {
+        println!("Received signal {:?}", signal);
     }
 
     fn handle_solver_requests(&mut self) {
@@ -81,7 +100,7 @@ Results::new(vec![])
         println!("Creating solver {}", id);
 
         let result_tx = self.solver_tx.clone();
-        Solver::<TState>::new(id, result_tx)
+        Solver::<TState>::new(id, self.data.clone_dyn(), result_tx)
     }
 
     fn terminate_solver(&mut self) {

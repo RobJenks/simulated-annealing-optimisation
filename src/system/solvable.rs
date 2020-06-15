@@ -15,4 +15,7 @@ pub trait Solvable<TState>
 
     fn get_optimising_iteration_count(&self) -> usize;
 
+    // Must expose a dynamic clone
+    fn clone_dyn(&self) -> Box<dyn Solvable<TState>>;
+
 }
