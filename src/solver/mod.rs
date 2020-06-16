@@ -2,13 +2,14 @@ pub mod command;
 pub mod result;
 pub mod signal;
 
-use crate::system::solvable::Solvable;
 use std::sync::mpsc::{Sender, Receiver, channel};
+use crate::system::solvable::Solvable;
 use crate::solver::command::Command;
 use crate::system::state::State;
 use crate::base::{SolverId, Temp};
 use crate::solver::signal::SolverSignal;
 use crate::solver::result::SolverResult;
+use std::time::Duration;
 
 pub struct Solver<TState>
     where TState: State {
@@ -41,6 +42,23 @@ impl <TState> Solver<TState>
 
     pub fn start(&self) {
 
+        let id = self.id;
+        let mut initial = self.data.generate_initial_state();
+        let output = self.result_output.clone();
+
+        let thread = std::thread::spawn(move || {
+            println!("#STARTING SOLVER");
+            output.send(SolverResult::new(id, initial.generate_update()));
+            std::thread::sleep(Duration::from_millis(500));
+            output.send(SolverResult::new(id, initial.generate_update().generate_update()));
+            std::thread::sleep(Duration::from_millis(750));
+            output.send(SolverResult::new(id, initial.generate_update().generate_update().generate_update()));
+            std::thread::sleep(Duration::from_millis(500));
+        });
+
+        thread.join().unwrap_or_else(|_| panic!("Failed to join temporary solver thread"));
+        self.signal_sender.send(SolverSignal::Complete(self.id));
+        println!("#SOLVER DONE");
     }
 
     fn within_temp_threshold(&self, sys_temp: Temp) -> bool {

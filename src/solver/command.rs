@@ -1,12 +1,6 @@
-const CMD_TERMINATE: i32 = 1;
+use crate::base::SolverId;
 
-pub struct Command {
-    operation: i32
-}
-
-impl Command {
-    pub fn terminate() -> Self { Self { operation: CMD_TERMINATE } }
-
-    pub fn get_operation(&self) -> i32 { self.operation }
-
+pub enum Command {
+    Noop,
+    Terminate(SolverId),
 }
