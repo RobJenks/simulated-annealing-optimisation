@@ -16,10 +16,10 @@ use crate::solver::signal::SolverSignal;
 const DEFAULT_INITIAL_POOL_SIZE: usize = 1;
 const DEFAULT_RESULT_CHANNEL_TIMEOUT_SECS: u64 = 3;
 
-pub struct System<'a, TState>
-    where TState: State {
+pub struct System<TState>
+    where TState: 'static + State {
 
-    data: &'a dyn Solvable<TState>,
+    data: Box<dyn Solvable<TState>>,
     pool_target: usize,
     total_solvers_created: SolverId,
 
@@ -29,14 +29,14 @@ pub struct System<'a, TState>
     solver_rx: Receiver<SolverResult<TState>>,  // mpsc receipt channel for solver results
 }
 
-impl<'a, TState> System<'a, TState>
-    where TState: State {
+impl<TState> System<TState>
+    where TState: 'static + State {
 
-    pub fn new(data: &'a dyn Solvable<TState>) -> Self {
+    pub fn new(data: Box<dyn Solvable<TState>>) -> Self {
         let (solver_tx, solver_rx) = channel();
 
         Self {
-            data, solvers: vec![],
+            data: data.clone_dyn(), solvers: vec![],
             pool_target: DEFAULT_INITIAL_POOL_SIZE, total_solvers_created: 0,
             solver_tx, solver_rx
         }

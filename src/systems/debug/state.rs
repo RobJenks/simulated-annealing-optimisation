@@ -5,7 +5,7 @@ use crate::system::solvable::Solvable;
 use std::sync::mpsc::channel;
 use std::fmt::{Debug, Formatter};
 
-
+#[derive(Clone)]
 pub struct DebugState {
     value: i32,
 }
@@ -33,7 +33,7 @@ impl State for DebugState {
     }
 
     fn generate_update(&self) -> Self {
-        Self { value: rand::thread_rng().gen_range(0, 3) - 1 }  // [-1 +1]
+        Self { value: self.value + if rand::random::<bool>() { 1 } else { -1 } }  // increment [-1 +1]
     }
 }
 

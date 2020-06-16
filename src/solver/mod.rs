@@ -2,17 +2,19 @@ pub mod command;
 pub mod result;
 pub mod signal;
 
+use rand::{self, Rng};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use crate::system::solvable::Solvable;
 use crate::solver::command::Command;
 use crate::system::state::State;
-use crate::base::{SolverId, Temp};
+use crate::base::{SolverId, Temp, Prob};
 use crate::solver::signal::SolverSignal;
 use crate::solver::result::SolverResult;
 use std::time::Duration;
+use rand::rngs::ThreadRng;
 
 pub struct Solver<TState>
-    where TState: State {
+    where TState: 'static + State {
 
     id: SolverId,
     data: Box<dyn Solvable<TState>>,
@@ -30,30 +32,39 @@ pub struct Solver<TState>
 }
 
 impl <TState> Solver<TState>
-    where TState: State {
+    where TState: 'static + State {
 
     pub fn new(id: SolverId, data: Box<dyn Solvable<TState>>, result_output: Sender<SolverResult<TState>>) -> Self {
         let (command_inbound, command_receiver) = channel();
         let (signal_sender, signal_outbound) = channel();
-        let (result_output, result_outbound) = channel();
 
         Self { id, data, command_inbound, command_receiver, signal_outbound, signal_sender, result_output }
     }
 
     pub fn start(&self) {
-
         let id = self.id;
-        let mut initial = self.data.generate_initial_state();
+        let mut sys_temp = self.data.get_initial_system_temp();
+        let sys_temp_falloff = self.data.get_temp_falloff();
+        let sys_temp_threshold = self.data.get_temp_termination_threshold();
+
+        let initial_state = self.data.generate_initial_state();
         let output = self.result_output.clone();
 
         let thread = std::thread::spawn(move || {
             println!("#STARTING SOLVER");
-            output.send(SolverResult::new(id, initial.generate_update()));
-            std::thread::sleep(Duration::from_millis(500));
-            output.send(SolverResult::new(id, initial.generate_update().generate_update()));
-            std::thread::sleep(Duration::from_millis(750));
-            output.send(SolverResult::new(id, initial.generate_update().generate_update().generate_update()));
-            std::thread::sleep(Duration::from_millis(500));
+            let mut rng = rand::thread_rng();
+            let mut state = initial_state;
+
+            while Solver::<TState>::within_temp_threshold(sys_temp, sys_temp_threshold) {
+                let candidate = state.generate_update();
+                if Solver::<TState>::state_accepted(&candidate, &state, sys_temp, &mut rng) {
+                    state = candidate;
+                }
+
+                sys_temp += sys_temp_falloff;
+            }
+
+            output.send(SolverResult::new(id, state));
         });
 
         thread.join().unwrap_or_else(|_| panic!("Failed to join temporary solver thread"));
@@ -61,8 +72,12 @@ impl <TState> Solver<TState>
         println!("#SOLVER DONE");
     }
 
-    fn within_temp_threshold(&self, sys_temp: Temp) -> bool {
-        sys_temp < self.data.get_temp_termination_threshold()
+    fn state_accepted(candidate: &TState, current: &TState, sys_temp: Temp, rng: &mut ThreadRng) -> bool {
+        candidate.acceptance_probability(current, sys_temp) > rng.gen::<Prob>()
+    }
+
+    fn within_temp_threshold(sys_temp: Temp, sys_temp_threshold: Temp) -> bool {
+        sys_temp > sys_temp_threshold
     }
 
     pub fn get_id(&self) -> &SolverId { &self.id }

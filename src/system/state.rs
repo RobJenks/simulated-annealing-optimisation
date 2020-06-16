@@ -1,6 +1,7 @@
 use crate::base::*;
+use std::fmt::Debug;
 
-pub trait State : Send {
+pub trait State : Send + Sized + Clone + Sync + Debug {
     // Determine whether this state is 'better' than the given state value
     fn is_better_than(&self, other_state: &Self) -> bool;
 
