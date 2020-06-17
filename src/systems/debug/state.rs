@@ -19,22 +19,7 @@ impl DebugState {
 }
 
 impl State for DebugState {
-    fn is_better_than(&self, other_state: &Self) -> bool {
-        self.value > other_state.value
-    }
 
-    fn acceptance_probability(&self, current_state: &Self, temp: f32) -> Prob {
-        if temp > 50.0 {
-            if self.is_better_than(current_state) { 1.0 } else { 0.0 }
-        }
-        else {
-            if self.is_better_than(current_state) { 0.0 } else { 1.0 }
-        }
-    }
-
-    fn generate_update(&self) -> Self {
-        Self { value: self.value + if rand::random::<bool>() { 1 } else { -1 } }  // increment [-1 +1]
-    }
 }
 
 impl Debug for DebugState {

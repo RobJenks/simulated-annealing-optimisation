@@ -47,17 +47,20 @@ impl <TState> Solver<TState>
         let sys_temp_falloff = self.data.get_temp_falloff();
         let sys_temp_threshold = self.data.get_temp_termination_threshold();
 
+        let solvable = self.data.clone_dyn();
         let initial_state = self.data.generate_initial_state();
         let output = self.result_output.clone();
 
         let thread = std::thread::spawn(move || {
             println!("#STARTING SOLVER");
             let mut rng = rand::thread_rng();
+            let solv = solvable.clone_dyn();
             let mut state = initial_state;
 
             while Solver::<TState>::within_temp_threshold(sys_temp, sys_temp_threshold) {
-                let candidate = state.generate_update();
-                if Solver::<TState>::state_accepted(&candidate, &state, sys_temp, &mut rng) {
+                let candidate = solv.generate_state_update(&state);
+                if Solver::<TState>::state_accepted(&candidate, &state, sys_temp, &solv, &mut rng) {
+                    print!("{:.2}, ", solv.derive_state_cost(&state));
                     state = candidate;
                 }
 
@@ -72,8 +75,9 @@ impl <TState> Solver<TState>
         println!("#SOLVER DONE");
     }
 
-    fn state_accepted(candidate: &TState, current: &TState, sys_temp: Temp, rng: &mut ThreadRng) -> bool {
-        candidate.acceptance_probability(current, sys_temp) > rng.gen::<Prob>()
+    fn state_accepted(candidate: &TState, current: &TState, sys_temp: Temp,
+                      solvable: &Box<dyn Solvable<TState>>, rng: &mut ThreadRng) -> bool {
+        solvable.state_acceptance_probability(candidate, current, sys_temp) > rng.gen::<Prob>()
     }
 
     fn within_temp_threshold(sys_temp: Temp, sys_temp_threshold: Temp) -> bool {
