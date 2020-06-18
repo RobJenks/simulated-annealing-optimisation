@@ -52,15 +52,13 @@ impl <TState> Solver<TState>
         let output = self.result_output.clone();
 
         let thread = std::thread::spawn(move || {
-            println!("#STARTING SOLVER");
+            println!("Starting solver {} worker", id);
             let mut rng = rand::thread_rng();
-            let solv = solvable.clone_dyn();
             let mut state = initial_state;
 
             while Solver::<TState>::within_temp_threshold(sys_temp, sys_temp_threshold) {
-                let candidate = solv.generate_state_update(&state);
-                if Solver::<TState>::state_accepted(&candidate, &state, sys_temp, &solv, &mut rng) {
-                    print!("{:.2}, ", solv.derive_state_cost(&state));
+                let candidate = solvable.generate_state_update(&state);
+                if Solver::<TState>::state_accepted(&candidate, &state, sys_temp, &solvable, &mut rng) {
                     state = candidate;
                 }
 
@@ -70,9 +68,9 @@ impl <TState> Solver<TState>
             output.send(SolverResult::new(id, state));
         });
 
-        thread.join().unwrap_or_else(|_| panic!("Failed to join temporary solver thread"));
+        thread.join().unwrap_or_else(|_| panic!("Failed to join solver worker thread"));
         self.signal_sender.send(SolverSignal::Complete(self.id));
-        println!("#SOLVER DONE");
+        println!("Solver {} complete", self.id);
     }
 
     fn state_accepted(candidate: &TState, current: &TState, sys_temp: Temp,

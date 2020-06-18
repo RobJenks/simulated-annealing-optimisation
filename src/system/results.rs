@@ -13,7 +13,6 @@ impl <TState> Results<TState>
     where TState: State {
 
     pub fn new(results: Vec<SolverResult<TState>>) -> Self {
-        println!("#NEW RESULTS ({})", results.len());
         Self { solver_results: results }
     }
 

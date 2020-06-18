@@ -48,11 +48,10 @@ impl<TState> System<TState>
         while self.has_active_solvers() || self.requires_active_solvers() {
             self.handle_solver_requests();
             self.handle_solver_signals();
-            println!("#CHECK FOR RESULTS");
+
             self.solver_rx.recv_timeout(Duration::from_secs(DEFAULT_RESULT_CHANNEL_TIMEOUT_SECS))
                 .and_then(|x| Ok(results.push(x)))
                 .unwrap_or_else(|_| ());
-            println!("#DONE CHECKING FOR RESULTS");
         }
 
         Results::new(results)
@@ -70,12 +69,12 @@ impl<TState> System<TState>
             .map(|x| x.outbound_signal().try_recv())
             .filter_map(|x| x.ok())
             .collect::<Vec<_>>();
-        println!("#HANDLE SIGNALS");
+
         signals.iter().for_each(|x| self.handle_solver_signal(x));
     }
 
     fn handle_solver_signal(&mut self, signal: &SolverSignal) {
-        println!("Received signal {:?}", signal);
+        println!("Received solver signal: {:?}", signal);
         match signal {
             SolverSignal::Complete(id) => self.handle_solver_completion(*id),
             _ => println!("Unrecognised signal!"),
@@ -87,7 +86,7 @@ impl<TState> System<TState>
             .position(|x| x.get_id() == &id)
             .unwrap_or_else(|| panic!("Received completion signal for unknown solver"));
 
-        println!("Solver {} completed", self.solvers.get(ix).unwrap().get_id());
+        println!("Solver {} deregistered by system", self.solvers.get(ix).unwrap().get_id());
         self.solvers.remove(ix);
 
         self.pool_target -= 1;  // Reduce target pool size on successful completion, to prevent immediate re-instantiation

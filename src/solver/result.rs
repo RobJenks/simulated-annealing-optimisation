@@ -7,7 +7,6 @@ pub struct SolverResult<TState> {
 
 impl <TState> SolverResult<TState> {
     pub fn new(id: SolverId, state: TState) -> Self {
-        println!("#NEW SOLVER_RESULT ({})", id);
         Self { solver_id: id, state }
     }
 
